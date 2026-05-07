@@ -30,42 +30,6 @@ const IGNORED_CLASS_FRAGMENTS = [
   'ace_',
 ];
 
-const IMAGE_LOAD_BATCH_SIZE = 2;
-const IMAGE_LOAD_BATCH_DELAY_MS = 35;
-
-function delay(ms = 0) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getScrollableChatElement(ownerDocument) {
-  const topDocument = ownerDocument?.defaultView?.top?.document;
-  return topDocument?.getElementById('chat') || document.getElementById('chat');
-}
-
-async function runImageLoadTasks(tasks, ownerDocument) {
-  const chatElement = getScrollableChatElement(ownerDocument);
-  const shouldPreserveScroll =
-    chatElement &&
-    chatElement.scrollHeight - chatElement.scrollTop - chatElement.clientHeight > 32;
-
-  let previousScrollHeight = shouldPreserveScroll ? chatElement.scrollHeight : 0;
-
-  for (let index = 0; index < tasks.length; index += IMAGE_LOAD_BATCH_SIZE) {
-    const batch = tasks.slice(index, index + IMAGE_LOAD_BATCH_SIZE);
-    await Promise.all(batch.map((task) => task()));
-
-    if (shouldPreserveScroll) {
-      const nextScrollHeight = chatElement.scrollHeight;
-      chatElement.scrollTop += nextScrollHeight - previousScrollHeight;
-      previousScrollHeight = nextScrollHeight;
-    }
-
-    if (index + IMAGE_LOAD_BATCH_SIZE < tasks.length) {
-      await delay(IMAGE_LOAD_BATCH_DELAY_MS);
-    }
-  }
-}
-
 function getImageTags() {
   const settings = extension_settings[extensionName];
 
@@ -478,22 +442,18 @@ export async function createButtonAtPosition(
     return null;
   }
 
-  const loadExistingImage = async () => {
-    const foundExistingImage = await loadExistingImageIntoSpan(
-      normalizedTag,
-      span,
-      button,
-      label,
-      settings,
-    );
+  const foundExistingImage = await loadExistingImageIntoSpan(
+    normalizedTag,
+    span,
+    button,
+    label,
+    settings,
+  );
 
-    if (!foundExistingImage && shouldAutoGenerate) {
-      console.log('[iframe] 自动点击直接触发生成:', button);
-      triggerGeneration(button);
-    }
-  };
-
-  await loadExistingImage();
+  if (!foundExistingImage && shouldAutoGenerate) {
+    console.log('[iframe] 自动点击直接触发生成:', button);
+    triggerGeneration(button);
+  }
 
   return button;
 }
@@ -536,9 +496,7 @@ export async function findAndReplaceInElement(element, label = 'Generated Image'
     return;
   }
 
-  const autoGenerateEnabled =
-    settings.zidongdianji === 'true' &&
-    (window.zidongdianji || window.chatu8AutoGenerateVisible);
+  const autoGenerateEnabled = settings.zidongdianji === 'true' && window.zidongdianji;
   const { ownerDocument, textPositions, fullText } = collectElementTextAndPositions(element);
   const explicitTagMatches = getExplicitTagMatches(fullText, settings);
   const savedImageMatches = await getSavedImageMatches(fullText, element);
@@ -554,7 +512,7 @@ export async function findAndReplaceInElement(element, label = 'Generated Image'
   );
 
   for (const savedMatch of savedMatchesDescending) {
-    imageLoadTasks.push(() =>
+    imageLoadTasks.push(
       createButtonAtPosition(
         savedMatch.insertPosition,
         savedMatch.content,
@@ -640,7 +598,7 @@ export async function findAndReplaceInElement(element, label = 'Generated Image'
     range.insertNode(span);
     range.insertNode(button);
 
-    const imageLoadTask = async () => {
+    const imageLoadTask = (async () => {
       const foundExistingImage = await loadExistingImageIntoSpan(
         normalizedTag,
         span,
@@ -652,12 +610,12 @@ export async function findAndReplaceInElement(element, label = 'Generated Image'
       if (!foundExistingImage && autoGenerateEnabled) {
         autoGenerateButtons.unshift(button);
       }
-    };
+    })();
 
     imageLoadTasks.push(imageLoadTask);
   }
 
-  runImageLoadTasks(imageLoadTasks, ownerDocument).then(() => {
+  Promise.all(imageLoadTasks).then(() => {
     if (autoGenerateButtons.length > 0) {
       console.log('[iframe] 按正序触发自动生成，按钮数量:', autoGenerateButtons.length);
 
@@ -674,8 +632,6 @@ export async function findAndReplaceInElement(element, label = 'Generated Image'
       });
 
       console.log('[iframe] 自动点击任务已完成');
-    } else if (window.chatu8AutoGenerateVisible && extension_settings[extensionName]?.zidongdianji2 !== 'true') {
-      window.chatu8AutoGenerateVisible = false;
     }
   });
 

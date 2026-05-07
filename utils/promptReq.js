@@ -479,7 +479,9 @@ export async function handlePromptRequest(_0x5e3937, _0x11846c) {
           _0x3224f0.removeListener("st_chatu8_auto_click_complete", _0x51f014);
           window.autoClickTaskId = null;
           if (extension_settings[extensionName]?.zidongdianji2 !== "true") {
-            window.zidongdianji = false;
+            setTimeout(() => {
+              window.zidongdianji = false;
+            }, 5000);
           }
         }
       };
@@ -492,8 +494,8 @@ export async function handlePromptRequest(_0x5e3937, _0x11846c) {
           _0x3224f0.removeListener("st_chatu8_auto_click_complete", _0x51f014);
           return;
         }
-        import("./iframe/placeholder.js").then(({
-          findAndReplaceInElement: _0x400599
+        import("./iframe/index.js").then(({
+          processAllImagePlaceholders: _0x400599
         }) => {
           if (!_0x4623d6.isTaskInQueue(_0x51ced9)) {
             console.log("[promptReq] 自动点击任务已被取消");
@@ -502,15 +504,12 @@ export async function handlePromptRequest(_0x5e3937, _0x11846c) {
             _0x3224f0.removeListener("st_chatu8_auto_click_complete", _0x51f014);
             return;
           }
-          _0x400599(_0x5e3937);
+          _0x400599();
         }).catch(_0x425c4f => {
           debugError("handlePromptRequest", "加载 iframe 模块失败", _0x425c4f);
           console.error("[promptReq] 加载 iframe 模块失败:", _0x425c4f);
           _0x4623d6.completeTask(_0x51ced9, false);
           window.autoClickTaskId = null;
-          if (extension_settings[extensionName]?.zidongdianji2 !== "true") {
-            window.zidongdianji = false;
-          }
           _0x3224f0.removeListener("st_chatu8_auto_click_complete", _0x51f014);
         });
       }, 100);

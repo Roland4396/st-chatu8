@@ -211,7 +211,7 @@ async function main() {
   await initUI(_0x298d04);
   initializeNewlineFixer();
   setTimeout(addNewElement, 2000);
-  await chenk();
+  setInterval(chenk, 4000);
   await checkForUpdates();
 }
 function addNewElement() {
