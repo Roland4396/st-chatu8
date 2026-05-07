@@ -14,44 +14,80 @@ import { triggerGeneration, setShowImagePreview } from './generation.js';
 import { showImagePreview } from './imagePreview.js';
 
 let autoClickTimer = null;
+let visibleAutoGenerateTimer = null;
+let processingInitialized = false;
 
 window.zidongdianji = false;
+window.chatu8AutoGenerateVisible = false;
 
 setTriggerGeneration(triggerGeneration);
 setGorkTriggerGeneration(triggerGeneration);
 setShowImagePreview(showImagePreview);
 
-// Present in the original bundle, but not wired to an event in this file.
 const debouncedProcessVisible = debounce(() => {
   processMesTextElements();
   processIframes();
 }, 200);
 
-function enableTemporaryForceProcessing() {
-  window.zidongdianji = true;
-
+function clearTemporaryForceProcessing() {
   if (autoClickTimer) {
     clearTimeout(autoClickTimer);
+    autoClickTimer = null;
   }
 
-  if (extension_settings[extensionName].zidongdianji2 !== 'true') {
-    autoClickTimer = setTimeout(() => {
-      window.zidongdianji = false;
-      autoClickTimer = null;
+  if (extension_settings[extensionName]?.zidongdianji2 !== 'true' && !window.autoClickTaskId) {
+    window.zidongdianji = false;
+  }
+}
+
+function enableVisibleAutoGenerateWindow() {
+  if (extension_settings[extensionName]?.zidongdianji !== 'true') {
+    window.chatu8AutoGenerateVisible = false;
+    return;
+  }
+
+  window.chatu8AutoGenerateVisible = true;
+
+  if (visibleAutoGenerateTimer) {
+    clearTimeout(visibleAutoGenerateTimer);
+  }
+
+  if (extension_settings[extensionName]?.zidongdianji2 !== 'true') {
+    visibleAutoGenerateTimer = setTimeout(() => {
+      window.chatu8AutoGenerateVisible = false;
+      visibleAutoGenerateTimer = null;
     }, 5000);
   }
 }
 
+function scheduleVisibleProcessing({ autoGenerate = false } = {}) {
+  clearTemporaryForceProcessing();
+
+  if (autoGenerate) {
+    enableVisibleAutoGenerateWindow();
+  }
+
+  debouncedProcessVisible();
+}
+
 eventSource.on(event_types.GENERATION_ENDED, async () => {
-  enableTemporaryForceProcessing();
+  scheduleVisibleProcessing({ autoGenerate: true });
 });
 
 eventSource.on(event_types.MESSAGE_SWIPED, async () => {
-  enableTemporaryForceProcessing();
+  scheduleVisibleProcessing({ autoGenerate: true });
+});
+
+eventSource.on(event_types.MESSAGE_RECEIVED, async () => {
+  scheduleVisibleProcessing();
+});
+
+eventSource.on(event_types.MESSAGE_EDITED, async () => {
+  scheduleVisibleProcessing();
 });
 
 eventSource.on('js_generation_ended', async () => {
-  enableTemporaryForceProcessing();
+  scheduleVisibleProcessing({ autoGenerate: true });
 });
 
 export function processAllImagePlaceholders() {
@@ -76,8 +112,20 @@ export function initializeImageProcessing() {
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', processAllImagePlaceholders);
+    document.addEventListener(
+      'DOMContentLoaded',
+      () => {
+        processingInitialized = true;
+        processAllImagePlaceholders();
+      },
+      { once: true },
+    );
   } else {
-    processAllImagePlaceholders();
+    if (!processingInitialized) {
+      processingInitialized = true;
+      processAllImagePlaceholders();
+    } else {
+      debouncedProcessVisible();
+    }
   }
 }
